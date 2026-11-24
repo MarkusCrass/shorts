@@ -3,5 +3,6 @@ downloads/
 shorts/
 .tools/
 cookies.txt
+shorts_build.log
 __pycache__/
 *.pyc
