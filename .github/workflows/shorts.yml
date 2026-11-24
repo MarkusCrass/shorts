@@ -1,0 +1,131 @@
+name: Shorts
+
+# Нарезка шортсов на раннере GitHub: раннер качает клипы и режет вертикаль 1080×1920.
+# Запуск: Actions → Shorts → Run workflow (или "Re-run" после правки clips.json).
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Подстрока имени клипа (например 01 или liquid). Пусто — все клипы"
+        required: false
+        default: ""
+      mode:
+        description: "crop — центр 9:16, blur — размытый фон. Пусто — как в clips.json"
+        required: false
+        default: ""
+      no_hook:
+        description: "Без текста-хука на первых секундах"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write   # нужно для загрузки шортсов в релиз
+
+concurrency:
+  group: shorts-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  make-shorts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Проверить конфиг
+        run: python make_shorts.py --list
+
+      - name: Скачать клипы и нарезать шортсы
+        env:
+          INPUT_ONLY: ${{ inputs.only }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_NO_HOOK: ${{ inputs.no_hook }}
+          # если YouTube просит "подтвердите, что вы не робот",
+          # положите cookies.txt в корень репозитория
+          YTDLP_COOKIES_FILE: ${{ github.workspace }}/cookies.txt
+        run: |
+          set -uo pipefail
+          ARGS=()
+          if [ -n "${INPUT_ONLY:-}" ]; then ARGS+=(--only "$INPUT_ONLY"); fi
+          case "${INPUT_MODE:-}" in
+            crop|blur) ARGS+=(--mode "$INPUT_MODE") ;;
+            "") ;;
+            *) echo "WARN: неизвестный mode=$INPUT_MODE, используется конфиг" ;;
+          esac
+          if [ "${INPUT_NO_HOOK:-false}" = "true" ]; then ARGS+=(--no-hook); fi
+          python make_shorts.py "${ARGS[@]}"
+
+      - name: Итоги
+        if: always()
+        run: |
+          {
+            echo "### Шортсы"
+            if [ -f shorts/uploads.json ]; then
+              python -c "
+          import json
+          data = json.load(open('shorts/uploads.json', encoding='utf-8'))
+          print(f'Готово шортсов: {len(data)}')
+          print()
+          for item in data:
+              print(f\"- **{item['file']}** — {item['title']}\")
+          "
+            else
+              echo "Шортсы не получились — смотрите лог шага нарезки."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Артефакт (7 дней)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ github.run_number }}
+          path: |
+            shorts/*.mp4
+            shorts/*.jpg
+            shorts/*.txt
+            shorts/uploads.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Загрузить в релиз shorts-latest
+        if: always()   # даже если часть клипов упала — выложим то, что получилось
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          videos=(shorts/*.mp4)
+          posters=(shorts/*.jpg)
+          if [ ${#videos[@]} -eq 0 ]; then
+            echo "Нет mp4 — релиз не обновляем"
+            exit 0
+          fi
+          TAG="shorts-latest"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Релиз $TAG уже есть — перезаписываю файлы"
+            gh release upload "$TAG" "${videos[@]}" "${posters[@]}" --clobber --repo "$REPO"
+          else
+            gh release create "$TAG" "${videos[@]}" "${posters[@]}" \
+              --repo "$REPO" \
+              --title "Shorts: последняя нарезка" \
+              --notes "Автонарезка вертикальных шортсов 1080×1920 из clips.json" \
+              --latest
+          fi
+          {
+            echo "### Скачать"
+            echo "https://github.com/$REPO/releases/tag/$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"
