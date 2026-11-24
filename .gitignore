@@ -6,3 +6,6 @@ cookies.txt
 shorts_build.log
 __pycache__/
 *.pyc
+promo_out/
+tracks/
+.cache/
