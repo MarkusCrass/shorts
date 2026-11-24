@@ -23,6 +23,11 @@ on:
         type: boolean
         required: false
         default: false
+      publish_log:
+        description: "Номер issue, куда опубликовать хвост лога (0 — не публиковать)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: write   # нужно для загрузки шортсов в релиз
@@ -76,7 +81,8 @@ jobs:
             *) echo "WARN: неизвестный mode=$INPUT_MODE, используется конфиг" ;;
           esac
           if [ "${INPUT_NO_HOOK:-false}" = "true" ]; then ARGS+=(--no-hook); fi
-          python make_shorts.py "${ARGS[@]}"
+          python make_shorts.py "${ARGS[@]}" 2>&1 | tee /tmp/shorts.log
+          exit "${PIPESTATUS[0]}"
 
       - name: Итоги
         if: always()
@@ -96,6 +102,24 @@ jobs:
               echo "Шортсы не получились — смотрите лог шага нарезки."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Лог в issue (если задан publish_log)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.publish_log }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "${ISSUE:-}" in ""|"0") echo "Публикация лога не запрошена"; exit 0 ;; esac
+          if [ ! -f /tmp/shorts.log ]; then echo "Лога нет"; exit 0; fi
+          {
+            echo "### Запуск [${{ github.run_id }}]($RUN_URL)"
+            echo '```'
+            tail -c 55000 /tmp/shorts.log
+            echo '```'
+          } > /tmp/comment.md
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file /tmp/comment.md
 
       - name: Артефакт (7 дней)
         if: always()
