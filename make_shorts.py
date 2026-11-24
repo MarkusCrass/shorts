@@ -561,7 +561,7 @@ def main():
 
     os.makedirs(DOWNLOADS, exist_ok=True)
     os.makedirs(args.outdir, exist_ok=True)
-    manifest, failed = [], []
+    manifest, failed, reasons = [], [], {}
     # один исходник может резаться на несколько сегментов — удаляем только после последнего
     uses_left = {}
     for item in jobs:
@@ -618,6 +618,7 @@ def main():
                 os.remove(src)
         except Exception as exc:  # noqa: BLE001 — один упавший клип не должен ломать остальные
             failed.append(name)
+            reasons[name] = str(exc)
             print(f"FAIL: {name}: {exc}", file=sys.stderr)
 
     if manifest:
@@ -628,7 +629,17 @@ def main():
 
     print(f"\nГотово: {len(manifest)} шортс(ов) в {args.outdir}")
     if failed:
-        print("Не получилось: " + ", ".join(failed), file=sys.stderr)
+        print("\nНе получилось: " + ", ".join(failed), file=sys.stderr)
+        joined = " ".join(reasons.values()).lower()
+        if "not a bot" in joined or "sign in to confirm" in joined:
+            print("\nПодсказка: YouTube требует вход в аккаунт. Сделайте ОДНО из двух:\n"
+                  "  1) установите расширение \"Get cookies.txt LOCALLY\", залогиньтесь в YouTube,\n"
+                  "     экспортируйте youtube.com и положите файл cookies.txt рядом с make_shorts.py;\n"
+                  "  2) или запустите с браузером: SHORTS_COOKIES_FROM_BROWSER=chrome\n"
+                  "     (Windows: set SHORTS_COOKIES_FROM_BROWSER=chrome)", file=sys.stderr)
+        if "503" in joined or "403" in joined or "dltv" in joined:
+            print("\nПодсказка: DLTV не отдаёт видео вашему провайдеру/сети. Берите\n"
+                  "  YouTube-вариант клипа (ссылки BLAST уже стоят в clips.json).", file=sys.stderr)
         return 1
     return 0
 
