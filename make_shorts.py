@@ -128,6 +128,40 @@ def ffmpeg_bin():
     return FFMPEG
 
 
+def ffmpeg_location():
+    """Путь к ffmpeg для --ffmpeg-location: yt-dlp находит рядом и ffprobe.
+
+    imageio-ffmpeg содержит только ffmpeg без ffprobe, а yt-dlp для склейки
+    форматов требует именно ffprobe. Поэтому готовим служебную папку, где
+    ffprobe — это копия/ссылка на ffmpeg (для наших задач он совместим).
+    """
+    path = find_bin("ffmpeg", "imageio_ffmpeg")
+    if not path:
+        return ""
+    if find_bin("ffprobe"):  # системный ffmpeg в порядке — берём как есть
+        return path
+
+    tools = os.path.join(ROOT, ".tools")
+    ffmpeg_link = os.path.join(tools, "ffmpeg")
+    ffprobe_link = os.path.join(tools, "ffprobe")
+    try:
+        os.makedirs(tools, exist_ok=True)
+        for link in (ffmpeg_link, ffprobe_link):
+            if os.path.exists(link) or os.path.islink(link):
+                continue
+            try:
+                os.symlink(path, link)
+            except (OSError, NotImplementedError):
+                # Windows без прав на симлинки — просто копируем
+                import shutil as _shutil
+                _shutil.copy2(path, link)
+        if os.path.exists(ffprobe_link):
+            return ffmpeg_link
+    except OSError:
+        pass
+    return path
+
+
 def ffprobe_bin():
     global FFPROBE
     if FFPROBE is None:
@@ -249,17 +283,26 @@ def _yt_extra_args(url, use_browser_cookies=False):
     return extra
 
 
-def download_section(url, out_template, start=None, end=None, use_browser_cookies=False):
-    """Скачать клип (или только нужный отрезок) через yt-dlp, через python -m yt_dlp."""
+def download_section(url, out_template, start=None, end=None, use_browser_cookies=False,
+                     full=False):
+    """Скачать клип (или только нужный отрезок) через yt-dlp, через python -m yt_dlp.
+
+    full=True — качать целиком (когда формат не поддерживает нарезку).
+    """
     cmd = [PYTHON, "-m", "yt_dlp",
-           "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
+           # protocol^=https — только прямые ссылки: частичная загрузка
+           # (--download-sections) не работает для HLS/DASH, а клиенты
+           # YouTube часто отдают именно m3u8
+           "-f", "bv*[protocol^=https][height<=1080]+ba[protocol^=https]"
+                 "/b[protocol^=https][height<=1080]/b[protocol^=https]"
+                 "/bv*[height<=1080]+ba/b[height<=1080]/b",
            "--merge-output-format", "mp4",
            "--no-playlist",
            "--retries", "5", "--fragment-retries", "5",
            "--no-warnings",
            "-o", out_template]
     is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)/", url))
-    if start is not None and end is not None and is_youtube:
+    if start is not None and end is not None and is_youtube and not full:
         # качаем только нужный кусок: в разы быстрее на часовых записях.
         # для generic-сайтов (DLTV и т.п.) --download-sections не поддерживается
         cmd += ["--download-sections", f"*{fmt_time(start)}-{fmt_time(end)}",
@@ -267,6 +310,11 @@ def download_section(url, out_template, start=None, end=None, use_browser_cookie
     cookie = cookies_file()
     if cookie:
         cmd += ["--cookies", cookie]
+    # без этого yt-dlp не видит ffmpeg из imageio-ffmpeg и падает на
+    # --download-sections с "ffmpeg is not installed"
+    location = ffmpeg_location()
+    if location:
+        cmd += ["--ffmpeg-location", location]
     cmd += _yt_extra_args(url, use_browser_cookies)
     cmd.append(url)
     run(cmd)
@@ -315,9 +363,17 @@ COOKIE_ERROR_MARKERS = ("Failed to decrypt with DPAPI", "could not decrypt",
                         "Failed to decrypt", "unable to decrypt",
                         "failed to load cookies", "cookie database")
 
+PARTIAL_ERROR_MARKERS = ("cannot be partially downloaded",
+                         "requested downloading the video partially")
+
 
 def _is_bot_check(exc):
     return any(marker in str(exc) for marker in BOT_CHECK_MARKERS)
+
+
+def _is_partial_error(exc):
+    """Формат не поддерживает --download-sections (HLS/DASH): качаем целиком."""
+    return any(marker in str(exc).lower() for marker in PARTIAL_ERROR_MARKERS)
 
 
 def _is_cookie_error(exc):
@@ -371,13 +427,24 @@ def download(job, dst, section=None):
     is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)/", url))
     trimmed = bool(section) and is_youtube
     browser_cookies_done = False
+    full_download = False
 
     while True:
         try:
-            download_section(url, template, start, end, browser_cookies_done)
+            download_section(url, template, start, end, browser_cookies_done,
+                             full=full_download)
+            if full_download:
+                trimmed = False   # файл целиком -> резать по таймкоду
             break
         except Exception as exc:  # noqa: BLE001 — разбираем причину и пробуем дальше
             reason = _last_line(exc)
+
+            # формат не умеет частичную загрузку -> качаем целиком
+            if _is_partial_error(exc) and not full_download:
+                print("    формат не поддерживает нарезку при скачивании —")
+                print("    качаю целиком и обрежу локально…")
+                full_download = True
+                continue
 
             # cookies из браузера не прочитались (DPAPI и т.п.)
             if _is_cookie_error(exc):
