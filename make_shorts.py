@@ -35,6 +35,36 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
+
+class _Tee:
+    """Дублирует вывод в консоль и в файл лога (для разбора проблем)."""
+
+    def __init__(self, stream, logfile):
+        self._stream = stream
+        self._file = logfile
+
+    def write(self, text):
+        self._stream.write(text)
+        try:
+            self._file.write(text)
+            self._file.flush()
+        except Exception:  # noqa: BLE001 — лог не должен ломать работу
+            pass
+        return len(text)
+
+    def flush(self):
+        for target in (self._stream, self._file):
+            try:
+                target.flush()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def isatty(self):
+        return getattr(self._stream, "isatty", lambda: False)()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DOWNLOADS = os.path.join(ROOT, "downloads")
 SHORTS = os.path.join(ROOT, "shorts")
@@ -690,6 +720,16 @@ def main():
     if not ({"--list", "--dry-run"} & set(argv)) and not check_dependencies():
         return 2
 
+    # всё, что печатается, дублируем в shorts_build.log — удобно приложить к вопросу
+    try:
+        log_path = os.path.join(ROOT, "shorts_build.log")
+        log_file = open(log_path, "w", encoding="utf-8", errors="replace")
+        sys.stdout = _Tee(sys.stdout, log_file)
+        sys.stderr = _Tee(sys.stderr, log_file)
+        print(f"Лог: {log_path}")
+    except OSError:
+        pass
+
     parser = argparse.ArgumentParser(description="Нарезка вертикальных шортсов 9:16")
     parser.add_argument("--only", default="", help="подстрока имени клипа для фильтра")
     parser.add_argument("--no-download", action="store_true", help="не качать, резать локальные файлы")
@@ -757,11 +797,17 @@ def main():
         try:
             seek = start  # если скачан весь файл, режем по таймкоду
             if not args.no_download:
-                # качаем чуть больше, чем нужно, чтобы был запас на точный seek
-                trimmed = download(job, src, section=(max(0.0, start - 2),
-                                                     start + duration + 2))
-                if trimmed:
-                    seek = 0  # файл уже начинается с начала отрезка
+                existing = media_duration(src) if os.path.exists(src) else None
+                if existing and existing > start + duration:
+                    # файл уже скачан целиком — не тратим трафик и время
+                    print(f"    используем скачанное: {os.path.basename(src)} "
+                          f"({fmt_time(existing)})")
+                else:
+                    # качаем чуть больше, чем нужно, чтобы был запас на точный seek
+                    trimmed = download(job, src, section=(max(0.0, start - 2),
+                                                         start + duration + 2))
+                    if trimmed:
+                        seek = 0  # файл уже начинается с начала отрезка
             if not os.path.exists(src):
                 raise JobError(f"исходник не найден: {src} (запусти без --no-download)")
 
@@ -771,10 +817,19 @@ def main():
                                f"({fmt_time(source_duration)}) — проверь таймкод "
                                f"(при скачивании отрезка время считается от 0)")
 
-            cut_vertical(src, dst, seek,
-                         duration, mode=mode, hook=hook, hook_seconds=hook_seconds,
-                         font=font, position=args.hook_position,
-                         crf=args.crf, preset=args.preset)
+            try:
+                cut_vertical(src, dst, seek,
+                             duration, mode=mode, hook=hook, hook_seconds=hook_seconds,
+                             font=font, position=args.hook_position,
+                             crf=args.crf, preset=args.preset)
+            except Exception as exc:  # noqa: BLE001 — хук не должен ломать нарезку
+                if not hook:
+                    raise
+                print(f"WARN: нарезка с хуком не удалась ({_last_line(exc, 200)}),")
+                print("      повторяю без текста…")
+                cut_vertical(src, dst, seek, duration, mode=mode, hook="",
+                             font="", position=args.hook_position,
+                             crf=args.crf, preset=args.preset)
             if not os.path.exists(dst) or os.path.getsize(dst) < 1024:
                 raise JobError("ffmpeg не создал выходной файл")
 
