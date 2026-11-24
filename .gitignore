@@ -1,6 +1,7 @@
 # Что не коммитим: скачанные исходники, готовые шортсы и временные файлы.
 downloads/
 shorts/
+.tools/
 cookies.txt
 __pycache__/
 *.pyc
