@@ -24,16 +24,14 @@ goto deps
 set "PYEXE=python"
 
 :deps
-%PYEXE% -m pip install --upgrade -q -r requirements.txt >nul 2>&1
+%PYEXE% -m pip install --upgrade -q -r requirements.txt
+if errorlevel 1 %PYEXE% -m pip install --upgrade -q yt-dlp imageio-ffmpeg
 
-if defined SHORTS_COOKIES_FROM_BROWSER goto run
-if exist cookies.txt goto run
-if exist "%LOCALAPPDATA%\Google\Chrome\User Data" set "SHORTS_COOKIES_FROM_BROWSER=chrome"
-if exist "%APPDATA%\Mozilla\Firefox\Profiles" set "SHORTS_COOKIES_FROM_BROWSER=firefox"
-if exist "%LOCALAPPDATA%\Microsoft\Edge\User Data" set "SHORTS_COOKIES_FROM_BROWSER=edge"
+REM No browser cookies by default: on Windows Chrome/Edge cookies fail with
+REM "Failed to decrypt with DPAPI". Home internet usually works without cookies.
+REM If YouTube asks to sign in, the script will retry with cookies by itself.
 
 :run
-if defined SHORTS_COOKIES_FROM_BROWSER echo Using browser cookies: %SHORTS_COOKIES_FROM_BROWSER%
 %PYEXE% make_shorts.py %*
 set "STATUS=%ERRORLEVEL%"
 echo.
