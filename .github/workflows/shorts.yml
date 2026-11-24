@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: write   # нужно для загрузки шортсов в релиз
+  issues: write     # нужно для публикации лога в issue (publish_log)
 
 concurrency:
   group: shorts-${{ github.ref }}
