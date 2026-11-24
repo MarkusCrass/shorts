@@ -192,12 +192,43 @@ def yt_dlp_args():
 
 
 def cookies_file():
+    """cookies.txt из окружения, корня проекта или ~/.config/shorts."""
     for path in (os.environ.get("YTDLP_COOKIES_FILE"),
                  os.path.join(ROOT, "cookies.txt"),
                  os.path.expanduser("~/.config/shorts/cookies.txt")):
         if path and os.path.exists(path):
             return path
     return ""
+
+
+def cookies_from_browser():
+    """Браузер для автоматического экспорта cookies при локальном запуске.
+
+    Пример: SHORTS_COOKIES_FROM_BROWSER=chrome  (или firefox, edge, brave, chromium…)
+    """
+    return os.environ.get("SHORTS_COOKIES_FROM_BROWSER", "").strip()
+
+
+# Клиенты YouTube: часть из них не требует логина с «серых» IP дата-центров,
+# где обычный веб-клиент получает «Sign in to confirm you're not a bot».
+YT_PLAYER_CLIENTS = ["default", "tv", "ios", "mweb", "web_safari"]
+
+
+def _yt_extra_args(url):
+    """Браузерные cookies и/или перебор player-клиентов для YouTube."""
+    extra = yt_dlp_args()
+    browser = cookies_from_browser()
+    if browser:
+        extra = extra + ["--cookies-from-browser", browser]
+    if not re.search(r"(?:youtube\.com|youtu\.be)/", url):
+        return extra
+    if cookies_file() or browser:
+        return extra  # с cookies достаточно обычного клиента
+    forced = os.environ.get("YTDLP_PLAYER_CLIENTS", "").strip()
+    clients = forced.split(",") if forced else YT_PLAYER_CLIENTS[:1]
+    if clients and clients[0]:
+        extra = extra + ["--extractor-args", f"youtube:player_client={','.join(clients)}"]
+    return extra
 
 
 def download_section(url, out_template, start=None, end=None):
@@ -218,7 +249,7 @@ def download_section(url, out_template, start=None, end=None):
     cookie = cookies_file()
     if cookie:
         cmd += ["--cookies", cookie]
-    cmd += yt_dlp_args()
+    cmd += _yt_extra_args(url)
     cmd.append(url)
     run(cmd)
 
@@ -258,6 +289,14 @@ def download_direct(page_url, dst):
     raise JobError("не удалось скачать напрямую:\n" + "\n".join(errors))
 
 
+BOT_CHECK_MARKERS = ("confirm you’re not a bot", "confirm you're not a bot",
+                     "Sign in to confirm")
+
+
+def _is_bot_check(exc):
+    return any(marker in str(exc) for marker in BOT_CHECK_MARKERS)
+
+
 def download(job, dst, section=None):
     """Скачать исходник. Возвращает True, если файл начинается с начала отрезка.
 
@@ -272,11 +311,32 @@ def download(job, dst, section=None):
     try:
         download_section(url, template, start, end)
     except Exception as exc:  # noqa: BLE001 — пробуем запасной путь
-        reason = str(exc).strip().splitlines()
-        reason = reason[-1] if reason else "неизвестная ошибка"
-        print(f"WARN: yt-dlp не справился: {reason[:300]}")
-        print("      пробую прямую ссылку со страницы…")
-        download_direct(url, dst)
+        if _is_bot_check(exc) and is_youtube and not (
+                cookies_file() or cookies_from_browser()):
+            # антибот YouTube: перебираем player-клиенты, которые обходят проверку
+            saved = os.environ.get("YTDLP_PLAYER_CLIENTS")
+            try:
+                for client in YT_PLAYER_CLIENTS[1:]:
+                    print(f"    YouTube просит логин — пробую клиент '{client}'…")
+                    os.environ["YTDLP_PLAYER_CLIENTS"] = client
+                    try:
+                        download_section(url, template, start, end)
+                        break
+                    except JobError as retry_exc:
+                        exc = retry_exc
+                else:
+                    raise exc
+            finally:
+                if saved is None:
+                    os.environ.pop("YTDLP_PLAYER_CLIENTS", None)
+                else:
+                    os.environ["YTDLP_PLAYER_CLIENTS"] = saved
+        else:
+            reason = str(exc).strip().splitlines()
+            reason = reason[-1] if reason else "неизвестная ошибка"
+            print(f"WARN: yt-dlp не справился: {reason[:300]}")
+            print("      пробую прямую ссылку со страницы…")
+            download_direct(url, dst)
     if not os.path.exists(dst):
         # yt-dlp мог сохранить в другой контейнер
         for candidate in os.listdir(os.path.dirname(dst) or "."):
