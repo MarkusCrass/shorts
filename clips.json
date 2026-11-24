@@ -1,0 +1,44 @@
+{
+  "jobs": [
+    {
+      "name": "01_satanic_ultrakill_fountain",
+      "title": "Satanic УЛЬТРАКИЛЛ под фонтаном! PARIVISION vs Liquid",
+      "url": "https://dltv.org/videos/4727-parivision-vs-team-liquid-highlight-map-3-ultra-kill-by-satanic-under-the-fountain",
+      "start": "00:00:00",
+      "duration": 20,
+      "note": "DLTV-клип уже короткий — режем первые 20 сек. Если момент позже, поправь start."
+    },
+    {
+      "name": "02_navi_wipe_og",
+      "title": "ВАЙП OG под базой NAVI! BLAST Slam 9",
+      "url": "https://dltv.org/videos/4728-natus-vincere-vs-og-highlight-map-1-team-wipe-for-og-under-navis-base",
+      "start": "00:00:00",
+      "duration": 20,
+      "note": "DLTV-клип уже короткий — режем первые 20 сек."
+    },
+    {
+      "name": "03_noone_rp",
+      "title": "No[o]ne: RP на двоих решает драку! PARIVISION vs Liquid",
+      "url": "https://dltv.org/videos/4724-parivision-vs-team-liquid-highlight-map-1-2-men-rp-by-noone-allows-parivision-to-win-the-fight",
+      "start": "00:00:00",
+      "duration": 20,
+      "note": "DLTV-клип уже короткий. Альтернатива — полный хайлайт серии на YouTube: https://www.youtube.com/watch?v=odguY-kCJ8c (42:55), момент искать вручную."
+    },
+    {
+      "name": "04_ws_solo_aurora",
+      "title": "Ws СОЛО выигрывает драку! Aurora vs PARIVISION",
+      "url": "https://www.youtube.com/watch?v=a1K1eeMACdM",
+      "start": "00:05:00",
+      "duration": 20,
+      "note": "Полный матч 36:16. ВНИМАНИЕ: start=05:00 — ЗАГЛУШКА. Открой видео, найди момент соло Ws (Echo Slam + Fissure) и впиши точный start в формате HH:MM:SS."
+    },
+    {
+      "name": "05_furia_spirit_clutch",
+      "title": "FURIA vs Spirit: клатч в гранд-финале BLAST Rivals!",
+      "url": "https://www.youtube.com/watch?v=ZBoyAXokVtw",
+      "start": "00:05:00",
+      "duration": 20,
+      "note": "Сборка 1:25:32. ВНИМАНИЕ: start=05:00 — ЗАГЛУШКА. Выбери клатч/эйс и впиши точный start. Можно сделать 2-3 шортса из этого видео, продублировав запись с разными start."
+    }
+  ]
+}
