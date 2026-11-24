@@ -18,6 +18,11 @@ on:
         type: boolean
         required: false
         default: false
+      diagnose:
+        description: "Только проверить доступ к YouTube/DLTV и выйти"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write   # нужно для загрузки шортсов в релиз
@@ -48,7 +53,12 @@ jobs:
       - name: Проверить конфиг
         run: python make_shorts.py --list
 
+      - name: Диагностика сети (YouTube/DLTV)
+        if: ${{ inputs.diagnose }}
+        run: python scripts/check_network.py
+
       - name: Скачать клипы и нарезать шортсы
+        if: ${{ !inputs.diagnose }}
         env:
           INPUT_ONLY: ${{ inputs.only }}
           INPUT_MODE: ${{ inputs.mode }}
