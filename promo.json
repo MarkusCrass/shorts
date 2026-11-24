@@ -1,0 +1,66 @@
+{
+  "defaults": {
+    "duration": 20,
+    "mode": "crop",
+    "hook_seconds": 3.0,
+    "crf": 20,
+    "beats": 0
+  },
+  "channel": {
+    "name": "@your_channel",
+    "links": {
+      "youtube": "https://youtube.com/@your_channel",
+      "spotify": "",
+      "soundcloud": "",
+      "yandex": "",
+      "telegram": ""
+    }
+  },
+  "tracks": [
+    {
+      "id": "track01",
+      "title": "ЗАМЕНИ_МЕНЯ — название трека",
+      "file": "tracks/track01.mp3",
+      "bpm": 140,
+      "drop_at": "00:32",
+      "links": {
+        "spotify": "",
+        "soundcloud": "",
+        "yandex": ""
+      }
+    },
+    {
+      "id": "track02",
+      "title": "ЗАМЕНИ_МЕНЯ — второй трек",
+      "file": "tracks/track02.mp3",
+      "bpm": 150,
+      "drop_at": "00:45",
+      "links": {}
+    }
+  ],
+  "sources": [
+    {
+      "id": "dota_01",
+      "game": "dota2",
+      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
+      "segments": [
+        {"name": "a", "start": "00:02:00", "hook": ""},
+        {"name": "b", "start": "00:08:00", "hook": ""}
+      ]
+    },
+    {
+      "id": "cs2_01",
+      "game": "cs2",
+      "url": "",
+      "segments": [
+        {"name": "a", "start": "00:01:00", "hook": ""}
+      ]
+    }
+  ],
+  "tags": ["phonk", "trap", "dota2", "cs2", "shorts", "edit", "music"],
+  "title_templates": [
+    "{track} | {game} edit #shorts",
+    "{track} 🔥 {game} highlights #shorts",
+    "этот трек + {game} = имба #shorts"
+  ]
+}
