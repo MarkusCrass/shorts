@@ -27,6 +27,14 @@ import subprocess
 import sys
 import urllib.request
 
+# Windows: консоль по умолчанию в cp866/cp1251 — принудительно UTF-8,
+# иначе русские сообщения превращаются в «кракозябры».
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DOWNLOADS = os.path.join(ROOT, "downloads")
 SHORTS = os.path.join(ROOT, "shorts")
@@ -514,7 +522,44 @@ def validate(jobs):
 
 # ---------------------------------------------------------------- main
 
+def check_python_version():
+    """Понятное сообщение вместо трейсбека на старом Python."""
+    if sys.version_info < (3, 8):
+        print("ERROR: нужен Python 3.8 или новее. Сейчас: "
+              + sys.version.split()[0], file=sys.stderr)
+        print("Скачайте с https://www.python.org/downloads/ "
+              "(при установке отметьте «Add Python to PATH»)", file=sys.stderr)
+        return False
+    return True
+
+
+def check_dependencies():
+    """yt-dlp и ffmpeg: подсказываем команду установки, а не падаем с трейсбеком."""
+    missing = []
+    try:
+        import yt_dlp  # noqa: F401
+    except ImportError:
+        missing.append("yt-dlp")
+    if not find_bin("ffmpeg", "imageio_ffmpeg"):
+        missing.append("imageio-ffmpeg")
+    if missing:
+        print("ERROR: не установлены: " + ", ".join(missing), file=sys.stderr)
+        print("Выполните в папке проекта:", file=sys.stderr)
+        print(f'  "{sys.executable}" -m pip install -r requirements.txt', file=sys.stderr)
+        print("Если pip не найден — переустановите Python с галочкой "
+              "«Add Python to PATH».", file=sys.stderr)
+        return False
+    return True
+
+
 def main():
+    if not check_python_version():
+        return 2
+    argv = sys.argv[1:]
+    # для --list/--dry-run зависимости не нужны
+    if not ({"--list", "--dry-run"} & set(argv)) and not check_dependencies():
+        return 2
+
     parser = argparse.ArgumentParser(description="Нарезка вертикальных шортсов 9:16")
     parser.add_argument("--only", default="", help="подстрока имени клипа для фильтра")
     parser.add_argument("--no-download", action="store_true", help="не качать, резать локальные файлы")
