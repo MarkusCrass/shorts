@@ -1,34 +1,41 @@
 @echo off
-REM Запуск в один клик (Windows).
-REM   run.bat              - cookies из браузера + все клипы
-REM   run.bat --only 04    - только один клип
-chcp 65001 >nul
-cd /d %~dp0
+setlocal
+cd /d "%~dp0"
 
-python -m pip install --upgrade -q -r requirements.txt >nul 2>&1
-
-if not defined SHORTS_COOKIES_FROM_BROWSER if not exist cookies.txt (
-  if exist "%LOCALAPPDATA%\Google\Chrome\User Data" (
-    set SHORTS_COOKIES_FROM_BROWSER=chrome
-    echo Cookies беру из Chrome
-  ) else if exist "%APPDATA%\Mozilla\Firefox\Profiles" (
-    set SHORTS_COOKIES_FROM_BROWSER=firefox
-    echo Cookies беру из Firefox
-  ) else if exist "%LOCALAPPDATA%\Microsoft\Edge\User Data" (
-    set SHORTS_COOKIES_FROM_BROWSER=edge
-    echo Cookies беру из Edge
-  )
-)
-
-python make_shorts.py %*
-set STATUS=%ERRORLEVEL%
+where python >nul 2>&1
+if not errorlevel 1 goto havepy
+where py >nul 2>&1
+if not errorlevel 1 goto havepylauncher
 
 echo.
-if "%STATUS%"=="0" (
-  echo Готово! Шортсы лежат в папке shorts\
-  echo Там же: .jpg ^(превью^) и .txt ^(заголовок, описание, теги^).
-) else (
-  echo Часть клипов не получилась - смотрите подсказку выше.
-)
+echo Python not found.
+echo Install it from https://www.python.org/downloads/
+echo IMPORTANT: tick "Add Python to PATH" in the installer.
+echo Then run run.bat again.
+echo.
+pause
+exit /b 1
+
+:havepylauncher
+set "PYEXE=py -3"
+goto deps
+
+:havepy
+set "PYEXE=python"
+
+:deps
+%PYEXE% -m pip install --upgrade -q -r requirements.txt >nul 2>&1
+
+if defined SHORTS_COOKIES_FROM_BROWSER goto run
+if exist cookies.txt goto run
+if exist "%LOCALAPPDATA%\Google\Chrome\User Data" set "SHORTS_COOKIES_FROM_BROWSER=chrome"
+if exist "%APPDATA%\Mozilla\Firefox\Profiles" set "SHORTS_COOKIES_FROM_BROWSER=firefox"
+if exist "%LOCALAPPDATA%\Microsoft\Edge\User Data" set "SHORTS_COOKIES_FROM_BROWSER=edge"
+
+:run
+if defined SHORTS_COOKIES_FROM_BROWSER echo Using browser cookies: %SHORTS_COOKIES_FROM_BROWSER%
+%PYEXE% make_shorts.py %*
+set "STATUS=%ERRORLEVEL%"
+echo.
 pause
 exit /b %STATUS%
