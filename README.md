@@ -4,44 +4,74 @@
 через `ffmpeg`, с текстом-хуком на первых секундах, превью и готовыми
 заголовком/описанием/тегами для загрузки.
 
-## Вариант 1 — GitHub Actions (рекомендуется: скачивание идёт с серверов GitHub)
+## Что проверено на практике (важно прочитать)
 
-Песочницы/облака часто не пускают на YouTube и DLTV, а раннеры GitHub — пускают.
-Поэтому основной путь такой:
+| Путь | Результат проверки |
+|---|---|
+| Скачивание с серверов GitHub Actions | ❌ YouTube: **«Sign in to confirm you're not a bot»** — все 10 player-клиентов (tv, ios, web, android, android_vr, web_embedded…) получают `LOGIN_REQUIRED` с дата-центровых IP. Нужны **cookies** (см. ниже) |
+| Скачивание с серверов GitHub Actions | ❌ DLTV: **HTTP 503 / 403** (антибот блокирует дата-центры). Нужен тот же обход или прокси |
+| Нарезка ffmpeg | ✅ проверено: `crop` и `blur` дают ровно 1080×1920, H.264 + AAC |
+| Хук, превью, несколько сегментов из одного файла, метаданные | ✅ проверено на тестовом видео |
+| Запуск в песочнице Arena | ❌ TLS-обрыв до YouTube/DLTV — только GitHub/PyPI |
 
-1. Открой вкладку **Actions** в репозитории и включи Actions (если выключены).
-2. Там же выбери workflow **Shorts** → **Run workflow**.
-3. Через ~5–10 минут забери результат:
-   - в **Releases** → тег [`shorts-latest`](../../releases/tag/shorts-latest) — mp4 + jpg-превью;
-   - в артефактах запуска (`shorts-<номер>`) — mp4, jpg, txt с описаниями, `uploads.json`;
-   - в summary запуска — список готовых шортсов.
+Вывод: **без cookies YouTube видео не скачается ни на раннере, ни из облака.**
+Дальше — два рабочих сценария.
 
-Workflow: `.github/workflows/shorts.yml`. Параметры запуска: `only` (подстрока имени
-клипа), `mode` (`crop`/`blur`), `no_hook` (без текста-хука).
-
-> Если YouTube просит «подтвердите, что вы не робот», экспортируй cookies браузера
-> в `cookies.txt` в корне репозитория (`yt-dlp --cookies-from-browser chrome --cookies cookies.txt`)
-> и закоммить его в приватный репозиторий, либо удали `YTDLP_COOKIES_FILE` из workflow.
-
-## Вариант 2 — локально
+## Сценарий A — свой компьютер (работает сразу, нужен ваш Chrome/Firefox)
 
 ```bash
-pip install -r requirements.txt      # yt-dlp + imageio-ffmpeg
-python make_shorts.py                # все клипы из clips.json
-python make_shorts.py --list         # показать список клипов
-python make_shorts.py --only 01      # только клипы, в имени которых есть "01"
-python make_shorts.py --mode blur    # вертикаль с размытым фоном вместо обрезки
-python make_shorts.py --no-hook      # без текста-хука
-python make_shorts.py --dry-run      # проверка конфига без сети и ffmpeg
+pip install -r requirements.txt
+
+# раз — cookies берутся прямо из браузера, где вы залогинены в YouTube
+SHORTS_COOKIES_FROM_BROWSER=chrome python make_shorts.py
+
+# или разово экспортировать cookies в файл
+# (в браузере установите расширение "Get cookies.txt LOCALLY" → экспорт youtube.com)
+python make_shorts.py            # подхватит ./cookies.txt автоматически
 ```
 
-Одним кликом: `run.sh` (Linux/macOS) или `run.bat` (Windows).
+Windows: `set SHORTS_COOKIES_FROM_BROWSER=chrome && python make_shorts.py`
+или просто `run.bat` (если `cookies.txt` лежит рядом).
 
-### Что на выходе (`shorts/`)
+DLTV локально качается как обычный сайт — антибот режет только дата-центры.
+Если DLTV всё же ругается, переключите клипы 01/03/06 на YouTube-версии
+(в `clips.json` уже стоят YouTube-ссылки BLAST).
+
+## Сценарий B — GitHub Actions (автоматизация, требует cookies-секрет)
+
+1. Экспортируйте `cookies.txt` из браузера, где залогинены в YouTube.
+2. Закодируйте: `base64 -w 0 cookies.txt` (Linux) / `certutil -encode cookies.txt c.txt` (Windows).
+3. GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
+   имя `YOUTUBE_COOKIES`, значение — base64-строка.
+   (Для DLTV можно добавить второй секрет-куки `DLTV_COOKIES` — тот же формат.)
+4. **Actions → Shorts → Run workflow**.
+
+Workflow (`.github/workflows/shorts.yml`) делает:
+- `make_shorts.py` качает клипы (только нужные отрезки для YouTube) и режет;
+- публикует артефакт `shorts-<номер>` (mp4 + jpg + txt + uploads.json) на 7 дней;
+- обновляет релиз [`shorts-latest`](../../releases/tag/shorts-latest) — оттуда удобно скачать;
+- пишет отчёт в summary;
+- при `publish_log=<номер issue>` копирует хвост лога в issue (issue #3 — для диагностики).
+
+Параметры запуска: `only` (подстрока имени клипа), `mode` (`crop`/`blur`),
+`no_hook`, `diagnose` (только проверить доступ к YouTube/DLTV на раннере).
+
+> ⚠️ Не используйте личный аккаунт Google для cookies — заведите отдельный.
+> Секреты в публичном репозитории видны только самому репозиторию, но cookies = вход в аккаунт.
+
+## Сценарий C — локальная нарезка уже скачанных файлов (без сети вообще)
+
+```bash
+# положите видео в downloads/<имя_клипа>.mp4
+python make_shorts.py --no-download
+python make_shorts.py --no-download --only 04 --mode blur
+```
+
+## Что на выходе (`shorts/`)
 
 | Файл | Что внутри |
 |---|---|
-| `<name>.mp4` | 1080×1920, H.264 + AAC, хук на первых 3.5 сек, готово к Shorts |
+| `<name>.mp4` | 1080×1920, H.264 + AAC, хук на первых 3.5 сек |
 | `<name>.jpg` | превью (кадр из хука) |
 | `<name>.txt` | заголовок (≤100 симв.), описание, теги |
 | `uploads.json` | те же метаданные для автозагрузки (например, через YouTube API) |
@@ -55,71 +85,71 @@ python make_shorts.py --dry-run      # проверка конфига без с
   "jobs": [
     {
       "name": "01_satanic_ultrakill_fountain",
-      "title": "Satanic УЛЬТРАКИЛЛ под фонтаном! PARIVISION vs Liquid #shorts",
-      "url": "https://dltv.org/videos/4727-...",
-      "start": "00:00:00",
+      "title": "Satanic УЛЬТРАКИЛЛ под фонтаном! #shorts",
+      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
+      "start": "00:02:00",
       "duration": 20,
       "hook": "Ультракилл под фонтаном",
-      "match": "PARIVISION vs Team Liquid, Blast Slam 9",
-      "description": "Текст описания",
-      "tags": ["parivision", "satanic"]
+      "match": "PARIVISION vs Team Liquid, Blast Slam 9"
     }
   ]
 }
 ```
 
-Полезные поля:
-
-- `mode` — `crop` (центр 9:16) или `blur` (вся картинка на размытом фоне);
-- `hook` — короткий текст (2–4 слова) на первых секундах;
-- `segments` — несколько шортсов из одного видео:
+Поля: `hook` (текст на первых секундах), `mode`, `match`, `description`, `tags`,
+`segments` — несколько шортсов из одного ролика (скачается один раз):
 
 ```json
 {
   "name": "05_liquid_dokonca_highlight",
-  "url": "https://www.youtube.com/watch?v=...",
-  "duration": 20,
+  "url": "https://www.youtube.com/watch?v=1iSsp7unYAo",
   "segments": [
     {"name": "first_blood", "start": "00:00:40", "hook": "Фёрст блад"},
-    {"name": "mid_fight",   "start": "00:12:10", "hook": "Драка на миду", "mode": "blur"}
+    {"name": "mid_fight", "start": "00:12:10", "hook": "Драка на миду", "mode": "blur"}
   ]
 }
 ```
 
-Скачивается один раз, режется на несколько файлов
-(`05_liquid_dokonca_highlight_first_blood.mp4`, `..._mid_fight.mp4`).
+### Таймкоды — что уже сделано и что осталось
 
-### Про таймкоды
+| Клип | Источник | start | Статус |
+|---|---|---|---|
+| 01 Satanic — ультракилл | YouTube `odguY-kCJ8c` (42:55) | 00:02:00 | ⚠️ заглушка |
+| 02 NAVI vs OG — вайп | YouTube `BmI5EyBMeXY` (26:48) | 00:00:00 | старт верный, момент ~ в начале |
+| 03 No[o]ne — RP на двоих | YouTube `odguY-kCJ8c` | 00:08:00 | ⚠️ заглушка |
+| 04 Ws — соло | YouTube `a1K1eeMACdM` (36:16) | 00:05:00 | ⚠️ заглушка (подсказка: «WS is on a monster kill, 11,000 net worth and he just can't die») |
+| 05 Liquid vs DO KONCA | YouTube `1iSsp7unYAo` (47:56) | 00:05:00 | ⚠️ заглушка |
+| 06 PARIVISION — тимвайп | YouTube `odguY-kCJ8c` | 00:16:00 | ⚠️ заглушка |
 
-Клипы 1–3 и 6 на DLTV уже короткие — режутся с `00:00:00`.
-У клипов 4–5 в конфиге стоят **заглушки `00:05:00`** — открой видео, найди момент
-и впиши точный `start` в формате `HH:MM:SS`. Для 4-го момента подсказка из транскрипта:
-«WS is on a monster kill, 11,000 net worth and he just can't die».
+Как поставить точный таймкод: откройте видео на YouTube, найдите момент,
+правый клик по таймлайну → **«Копировать URL с указанием времени»**, из ссылки
+возьмите значение `t=` (например `t=4m12s` → `00:04:12`) и впишите в `start`.
+Клипы 01/03/06 используют один ролик — старты обязаны различаться.
 
-## Найденные клипы
+## Управление
 
-1. **Satanic — ультракилл под фонтаном** (PARI vs Liquid, карта 3): https://dltv.org/videos/4727-parivision-vs-team-liquid-highlight-map-3-ultra-kill-by-satanic-under-the-fountain
-2. **Вайп OG под базой NAVI** (NAVI vs OG, карта 1): https://dltv.org/videos/4728-natus-vincere-vs-og-highlight-map-1-team-wipe-for-og-under-navis-base
-3. **No[o]ne — RP на двоих** (PARI vs Liquid, карта 1): https://dltv.org/videos/4724-parivision-vs-team-liquid-highlight-map-1-2-men-rp-by-noone-allows-parivision-to-win-the-fight
-4. **Ws — соло выигрывает драку** (Aurora vs PARI): https://www.youtube.com/watch?v=a1K1eeMACdM (36:16)
-5. **Liquid vs DO KONCA** — официальный хайлайт BLAST Slam IX: https://www.youtube.com/watch?v=1iSsp7unYAo (47:56)
-6. **Team wipe for PARIVISION** (PARI vs Liquid, карта 1): https://dltv.org/videos/4725-parivision-vs-team-liquid-highlight-map-1-team-wipe-for-parivision
+```bash
+python make_shorts.py --list         # список клипов
+python make_shorts.py --dry-run      # проверка конфига
+python make_shorts.py --only 04      # один клип
+python make_shorts.py --mode blur    # вся картинка на размытом фоне
+python make_shorts.py --no-hook      # без текста
+python make_shorts.py --keep-video   # не удалять исходники
+python make_shorts.py --hook-position bottom --hook-seconds 5
+```
 
-Ещё в запас: полный хайлайт PARIVISION vs Liquid — https://www.youtube.com/watch?v=odguY-kCJ8c (42:55).
-
-> ⚠️ Важно: старый клип `ZBoyAXokVtw` («Furia vs Team Spirit — BLAST Rivals») оказался
-> **Counter-Strike 2**, а не Dota 2. Он убран и заменён на Dota-хайлайт Liquid vs DO KONCA.
-
-## Переменные окружения
+Переменные окружения:
 
 | Переменная | Зачем |
 |---|---|
-| `YTDLP_COOKIES_FILE` | путь к `cookies.txt`, если YouTube требует вход |
+| `SHORTS_COOKIES_FROM_BROWSER` | `chrome`/`firefox`/`edge`/`brave` — cookies прямо из браузера (локально) |
+| `YTDLP_COOKIES_FILE` | путь к `cookies.txt` (по умолчанию ищется `./cookies.txt`) |
+| `YTDLP_PLAYER_CLIENTS` | свои player-клиенты, через запятую |
+| `YTDLP_EXTRA_ARGS` | любые доп. флаги yt-dlp, например `--proxy socks5://127.0.0.1:1080` |
 | `SHORTS_FONT` | путь к `.ttf` для хука (кириллица поддерживается) |
-| `YTDLP_EXTRA_ARGS` | доп. аргументы yt-dlp, например `--proxy socks5://127.0.0.1:1080` |
 
 ## Про авторские права
 
 Это контент организаторов (BLAST, DLTV, BETBOOM, Dota 2 Rapier). Для публикации
-добавь свой комментарий/текст/озвучку и проверь правила использования. Шортсы без
-собственного вклада могут заблокировать по Content ID.
+добавьте свой комментарий/текст/озвучку и проверьте правила использования. Шортсы
+без собственного вклада могут заблокировать по Content ID.

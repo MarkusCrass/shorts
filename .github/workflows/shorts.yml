@@ -66,6 +66,22 @@ jobs:
         if: ${{ inputs.diagnose }}
         run: python scripts/check_network.py 2>&1 | tee /tmp/shorts.log
 
+      - name: Подготовить cookies для YouTube
+        env:
+          # секрет репозитория: cookies.txt в base64 (см. README)
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          set -u
+          if [ -n "${YOUTUBE_COOKIES:-}" ]; then
+            printf '%s' "$YOUTUBE_COOKIES" | base64 -d > cookies.txt 2>/dev/null \
+              || printf '%s' "$YOUTUBE_COOKIES" > cookies.txt
+            echo "cookies.txt: $(wc -l < cookies.txt) строк"
+          else
+            echo "Секрет YOUTUBE_COOKIES не задан."
+            echo "YouTube блокирует скачивание с IP GitHub (Sign in to confirm you're not a bot)."
+            echo "Добавь секрет: Settings → Secrets and variables → Actions → New repository secret."
+          fi
+
       - name: Скачать клипы и нарезать шортсы
         if: ${{ !inputs.diagnose }}
         env:
