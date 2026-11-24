@@ -1,155 +1,119 @@
-# shorts — нарезка турнирных клипов для YouTube Shorts (Dota 2)
+# shorts — нарезка клипов Dota 2 в YouTube Shorts
 
-Конвейер: скачивание клипов через `yt-dlp` + нарезка вертикали **1080×1920 (9:16)**
-через `ffmpeg`, с текстом-хуком на первых секундах, превью и готовыми
-заголовком/описанием/тегами для загрузки.
+Простыми словами: скрипт **скачивает клипы** с YouTube и режет их в **вертикальные
+видео 1080×1920** с текстом-хуком, превью и готовым описанием для загрузки.
 
-## Что проверено на практике (важно прочитать)
+---
 
-| Путь | Результат проверки |
+## 🚀 Быстрый старт — делайте ровно это
+
+### Шаг 1. Скачайте папку проекта на компьютер
+
+Кнопка **Code → Download ZIP** на странице репозитория, распакуйте.
+(Или `git clone`, если умеете.)
+
+### Шаг 2. Установите Python
+
+Скачайте с [python.org](https://www.python.org/downloads/) и при установке
+обязательно поставьте галочку **«Add Python to PATH»**.
+
+### Шаг 3. Залогиньтесь в YouTube в своём браузере
+
+Откройте `youtube.com` в Chrome/Firefox/Edge и убедитесь, что вы вошли в аккаунт.
+Ничего экспортировать руками не нужно — скрипт возьмёт cookies сам.
+
+### Шаг 4. Запустите
+
+- **Windows:** двойной клик по `run.bat`
+- **Linux/macOS:** в терминале `./run.sh`
+
+Всё. Через несколько минут в папке **`shorts/`** появятся файлы:
+
+```
+shorts/
+  01_satanic_ultrakill_fountain.mp4   ← готовое видео для Shorts
+  01_satanic_ultrakill_fountain.jpg   ← превью
+  01_satanic_ultrakill_fountain.txt   ← заголовок, описание, теги — просто скопируйте
+  ...
+  uploads.json                        ← то же самое одним файлом
+```
+
+Загружайте mp4 на YouTube как Short, а текст копируйте из `.txt`.
+
+> Если что-то не получилось — в конце скрипт сам напишет, что именно делать
+> (например: «YouTube требует вход → установите cookies»).
+
+---
+
+## 🤔 Почему нельзя «просто запустить в облаке»
+
+Я проверил это на реальном сервере GitHub Actions:
+
+| Источник | Что происходит |
 |---|---|
-| Скачивание с серверов GitHub Actions | ❌ YouTube: **«Sign in to confirm you're not a bot»** — все 10 player-клиентов (tv, ios, web, android, android_vr, web_embedded…) получают `LOGIN_REQUIRED` с дата-центровых IP. Нужны **cookies** (см. ниже) |
-| Скачивание с серверов GitHub Actions | ❌ DLTV: **HTTP 503 / 403** (антибот блокирует дата-центры). Нужен тот же обход или прокси |
-| Нарезка ffmpeg | ✅ проверено: `crop` и `blur` дают ровно 1080×1920, H.264 + AAC |
-| Хук, превью, несколько сегментов из одного файла, метаданные | ✅ проверено на тестовом видео |
-| Запуск в песочнице Arena | ❌ TLS-обрыв до YouTube/DLTV — только GitHub/PyPI |
+| **YouTube с серверов GitHub** | «Sign in to confirm you're not a bot» — сервер не имеет истории браузера, все 10 клиентов блокируются |
+| **DLTV с серверов GitHub** | HTTP 503 — сайт блокирует дата-центры |
+| **Ваш домашний компьютер** | ✅ работает обычным образом |
 
-Вывод: **без cookies YouTube видео не скачается ни на раннере, ни из облака.**
-Дальше — два рабочих сценария.
+Поэтому **самый простой путь — запустить у себя** (шаги 1–4 выше). Cookies вашего
+браузера решают проблему YouTube автоматически.
 
-## Сценарий A — свой компьютер (работает сразу, нужен ваш Chrome/Firefox)
+## Если хотите автоматизацию на GitHub (необязательно)
+
+1. GitHub → **Settings → Secrets and variables → Actions → New repository secret**
+2. Имя: `YOUTUBE_COOKIES`
+3. Значение — содержимое `cookies.txt`, закодированное в base64:
+   - Linux/macOS: `base64 -w 0 cookies.txt | clip` (или просто вставьте вывод `base64 -w 0 cookies.txt`)
+   - Windows: `certutil -encode cookies.txt c.txt` → скопируйте содержимое `c.txt` без первых/последних строк
+4. **Actions → Shorts → Run workflow**
+
+Готовые видео появятся в разделе **Releases** (тег `shorts-latest`) и в артефактах запуска.
+
+> Cookied нужны от **отдельного** аккаунта Google, не от основного: это фактически вход в аккаунт.
+
+## Точные моменты (таймкоды)
+
+Некоторые клипы пока режутся с **временных заглушек** — в `clips.json` они помечены
+`⚠️ ЗАГЛУШКА`. Чтобы поставить настоящий момент:
+
+1. Откройте видео на YouTube и найдите нужный эпизод.
+2. Правый клик по таймлайну → **«Копировать URL с указанием времени»**.
+3. В ссылке будет `...&t=252s` — это секунды. Переведите в `00:04:12` и впишите в `start`.
+
+| Клип | start сейчас | Что искать |
+|---|---|---|
+| 01 Satanic — ультракилл | 00:02:00 | ультракилл Satanic, фонтан |
+| 02 NAVI vs OG | 00:00:00 | вайп OG у базы NAVI |
+| 03 No[o]ne — RP | 00:08:00 | RP по двум героям |
+| 04 Ws — соло | 00:05:00 | «WS is on a monster kill, 11,000 net worth and he just can't die» |
+| 05 Liquid vs DO KONCA | 00:05:00 | первый яркий файт |
+| 06 PARIVISION вайп | 00:16:00 | командный вайп |
+
+Клипы 01, 03 и 06 используют одно и то же видео, поэтому их `start` должны различаться.
+
+## Полезные команды
 
 ```bash
-pip install -r requirements.txt
-
-# раз — cookies берутся прямо из браузера, где вы залогинены в YouTube
-SHORTS_COOKIES_FROM_BROWSER=chrome python make_shorts.py
-
-# или разово экспортировать cookies в файл
-# (в браузере установите расширение "Get cookies.txt LOCALLY" → экспорт youtube.com)
-python make_shorts.py            # подхватит ./cookies.txt автоматически
+./run.sh --only 04          # только один клип (Windows: run.bat --only 04)
+./run.sh --mode blur        # вся картинка на размытом фоне, без обрезки краёв
+./run.sh --no-hook          # без текста на видео
+python make_shorts.py --list       # список клипов
+python make_shorts.py --dry-run    # проверить конфиг, ничего не качая
+python make_shorts.py --no-download  # резать уже готовые файлы из downloads/
 ```
 
-Windows: `set SHORTS_COOKIES_FROM_BROWSER=chrome && python make_shorts.py`
-или просто `run.bat` (если `cookies.txt` лежит рядом).
+Формат `clips.json`, поле `segments` (несколько шортсов из одного видео),
+переменные окружения — всё это описано в конце файла
+[`clips.json`](clips.json) и в комментариях `make_shorts.py`.
 
-DLTV локально качается как обычный сайт — антибот режет только дата-центры.
-Если DLTV всё же ругается, переключите клипы 01/03/06 на YouTube-версии
-(в `clips.json` уже стоят YouTube-ссылки BLAST).
+## Проверено
 
-## Сценарий B — GitHub Actions (автоматизация, требует cookies-секрет)
+- `crop` и `blur` дают ровно 1080×1920, H.264 + AAC ✅
+- кириллица в хуке рисуется корректно ✅
+- несколько сегментов из одного файла, превью, `.txt`/`uploads.json` ✅
+- ошибки не останавливают остальные клипы, код возврата корректный ✅
 
-1. Экспортируйте `cookies.txt` из браузера, где залогинены в YouTube.
-2. Закодируйте: `base64 -w 0 cookies.txt` (Linux) / `certutil -encode cookies.txt c.txt` (Windows).
-3. GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
-   имя `YOUTUBE_COOKIES`, значение — base64-строка.
-   (Для DLTV можно добавить второй секрет-куки `DLTV_COOKIES` — тот же формат.)
-4. **Actions → Shorts → Run workflow**.
+## Авторские права
 
-Workflow (`.github/workflows/shorts.yml`) делает:
-- `make_shorts.py` качает клипы (только нужные отрезки для YouTube) и режет;
-- публикует артефакт `shorts-<номер>` (mp4 + jpg + txt + uploads.json) на 7 дней;
-- обновляет релиз [`shorts-latest`](../../releases/tag/shorts-latest) — оттуда удобно скачать;
-- пишет отчёт в summary;
-- при `publish_log=<номер issue>` копирует хвост лога в issue (issue #3 — для диагностики).
-
-Параметры запуска: `only` (подстрока имени клипа), `mode` (`crop`/`blur`),
-`no_hook`, `diagnose` (только проверить доступ к YouTube/DLTV на раннере).
-
-> ⚠️ Не используйте личный аккаунт Google для cookies — заведите отдельный.
-> Секреты в публичном репозитории видны только самому репозиторию, но cookies = вход в аккаунт.
-
-## Сценарий C — локальная нарезка уже скачанных файлов (без сети вообще)
-
-```bash
-# положите видео в downloads/<имя_клипа>.mp4
-python make_shorts.py --no-download
-python make_shorts.py --no-download --only 04 --mode blur
-```
-
-## Что на выходе (`shorts/`)
-
-| Файл | Что внутри |
-|---|---|
-| `<name>.mp4` | 1080×1920, H.264 + AAC, хук на первых 3.5 сек |
-| `<name>.jpg` | превью (кадр из хука) |
-| `<name>.txt` | заголовок (≤100 симв.), описание, теги |
-| `uploads.json` | те же метаданные для автозагрузки (например, через YouTube API) |
-
-## `clips.json` — что резать
-
-```json
-{
-  "defaults": {"duration": 20, "mode": "crop", "hook_seconds": 3.5},
-  "tags": ["dota2", "shorts"],
-  "jobs": [
-    {
-      "name": "01_satanic_ultrakill_fountain",
-      "title": "Satanic УЛЬТРАКИЛЛ под фонтаном! #shorts",
-      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
-      "start": "00:02:00",
-      "duration": 20,
-      "hook": "Ультракилл под фонтаном",
-      "match": "PARIVISION vs Team Liquid, Blast Slam 9"
-    }
-  ]
-}
-```
-
-Поля: `hook` (текст на первых секундах), `mode`, `match`, `description`, `tags`,
-`segments` — несколько шортсов из одного ролика (скачается один раз):
-
-```json
-{
-  "name": "05_liquid_dokonca_highlight",
-  "url": "https://www.youtube.com/watch?v=1iSsp7unYAo",
-  "segments": [
-    {"name": "first_blood", "start": "00:00:40", "hook": "Фёрст блад"},
-    {"name": "mid_fight", "start": "00:12:10", "hook": "Драка на миду", "mode": "blur"}
-  ]
-}
-```
-
-### Таймкоды — что уже сделано и что осталось
-
-| Клип | Источник | start | Статус |
-|---|---|---|---|
-| 01 Satanic — ультракилл | YouTube `odguY-kCJ8c` (42:55) | 00:02:00 | ⚠️ заглушка |
-| 02 NAVI vs OG — вайп | YouTube `BmI5EyBMeXY` (26:48) | 00:00:00 | старт верный, момент ~ в начале |
-| 03 No[o]ne — RP на двоих | YouTube `odguY-kCJ8c` | 00:08:00 | ⚠️ заглушка |
-| 04 Ws — соло | YouTube `a1K1eeMACdM` (36:16) | 00:05:00 | ⚠️ заглушка (подсказка: «WS is on a monster kill, 11,000 net worth and he just can't die») |
-| 05 Liquid vs DO KONCA | YouTube `1iSsp7unYAo` (47:56) | 00:05:00 | ⚠️ заглушка |
-| 06 PARIVISION — тимвайп | YouTube `odguY-kCJ8c` | 00:16:00 | ⚠️ заглушка |
-
-Как поставить точный таймкод: откройте видео на YouTube, найдите момент,
-правый клик по таймлайну → **«Копировать URL с указанием времени»**, из ссылки
-возьмите значение `t=` (например `t=4m12s` → `00:04:12`) и впишите в `start`.
-Клипы 01/03/06 используют один ролик — старты обязаны различаться.
-
-## Управление
-
-```bash
-python make_shorts.py --list         # список клипов
-python make_shorts.py --dry-run      # проверка конфига
-python make_shorts.py --only 04      # один клип
-python make_shorts.py --mode blur    # вся картинка на размытом фоне
-python make_shorts.py --no-hook      # без текста
-python make_shorts.py --keep-video   # не удалять исходники
-python make_shorts.py --hook-position bottom --hook-seconds 5
-```
-
-Переменные окружения:
-
-| Переменная | Зачем |
-|---|---|
-| `SHORTS_COOKIES_FROM_BROWSER` | `chrome`/`firefox`/`edge`/`brave` — cookies прямо из браузера (локально) |
-| `YTDLP_COOKIES_FILE` | путь к `cookies.txt` (по умолчанию ищется `./cookies.txt`) |
-| `YTDLP_PLAYER_CLIENTS` | свои player-клиенты, через запятую |
-| `YTDLP_EXTRA_ARGS` | любые доп. флаги yt-dlp, например `--proxy socks5://127.0.0.1:1080` |
-| `SHORTS_FONT` | путь к `.ttf` для хука (кириллица поддерживается) |
-
-## Про авторские права
-
-Это контент организаторов (BLAST, DLTV, BETBOOM, Dota 2 Rapier). Для публикации
-добавьте свой комментарий/текст/озвучку и проверьте правила использования. Шортсы
-без собственного вклада могут заблокировать по Content ID.
+Это контент организаторов (BLAST, DLTV, BETBOOM). Для публикации добавьте свой
+комментарий/озвучку и проверьте правила использования — иначе возможен Content ID.
