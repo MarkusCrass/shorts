@@ -4,43 +4,65 @@
     "mode": "crop",
     "hook_seconds": 3.5
   },
-  "tags": ["dota2", "дота2", "dota", "esports", "highlights", "shorts", "киберспорт"],
+  "tags": [
+    "dota2",
+    "дота2",
+    "dota",
+    "esports",
+    "highlights",
+    "shorts",
+    "киберспорт"
+  ],
   "jobs": [
     {
       "name": "01_satanic_ultrakill_fountain",
       "title": "Satanic УЛЬТРАКИЛЛ под фонтаном! PARIVISION vs Liquid #shorts",
-      "url": "https://dltv.org/videos/4727-parivision-vs-team-liquid-highlight-map-3-ultra-kill-by-satanic-under-the-fountain",
-      "start": "00:00:00",
+      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
+      "start": "00:02:00",
       "duration": 20,
       "hook": "Ультракилл под фонтаном",
       "match": "PARIVISION vs Team Liquid, Blast Slam 9, карта 3",
       "description": "Satanic добивает соперников прямо под их фонтаном. PARIVISION забирает карту.",
-      "tags": ["parivision", "team liquid", "satanic", "blast slam"],
-      "note": "DLTV-клип уже короткий — режем первые 20 сек. Если момент позже, поправь start."
+      "tags": [
+        "parivision",
+        "team liquid",
+        "satanic",
+        "blast slam"
+      ],
+      "note": "⚠️ ЗАГЛУШКА: start=00:02:00 — найди реальный момент в видео https://www.youtube.com/watch?v=odguY-kCJ8c (правый клик по таймлайну → «Копировать URL с указанием времени»), впиши время и удали пометку. Все три клипа 01/03/06 используют один ролик, поэтому старты обязаны различаться."
     },
     {
       "name": "02_navi_wipe_og",
       "title": "ВАЙП OG под базой NAVI! BLAST Slam 9 #shorts",
-      "url": "https://dltv.org/videos/4728-natus-vincere-vs-og-highlight-map-1-team-wipe-for-og-under-navis-base",
+      "url": "https://www.youtube.com/watch?v=BmI5EyBMeXY",
       "start": "00:00:00",
       "duration": 20,
       "hook": "Вайп под базой NAVI",
       "match": "Natus Vincere vs OG, Blast Slam 9, карта 1",
       "description": "OG наказывает NAVI прямо под их базой — полный вайп состава.",
-      "tags": ["navi", "og", "blast slam"],
-      "note": "DLTV-клип уже короткий — режем первые 20 сек."
+      "tags": [
+        "navi",
+        "og",
+        "blast slam"
+      ],
+      "note": "Официальный хайлайт NAVI vs OG (26:48). В транскрипте есть \"Natsumi\", \"Another dead scan\", \"Sven strong\" — выбери вайп/файт и впиши start. DLTV-версия (4728) не скачивается с GitHub-раннера (503)."
     },
     {
       "name": "03_noone_rp",
       "title": "No[o]ne: RP на двоих решает драку! PARIVISION vs Liquid #shorts",
-      "url": "https://dltv.org/videos/4724-parivision-vs-team-liquid-highlight-map-1-2-men-rp-by-noone-allows-parivision-to-win-the-fight",
-      "start": "00:00:00",
+      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
+      "start": "00:08:00",
       "duration": 20,
       "hook": "RP на двоих",
       "match": "PARIVISION vs Team Liquid, Blast Slam 9, карта 1",
       "description": "No[o]ne попадает RP сразу по двум героям — драка за PARIVISION.",
-      "tags": ["parivision", "team liquid", "noone", "magnus"],
-      "note": "DLTV-клип уже короткий. Альтернатива — полный хайлайт серии на YouTube: https://www.youtube.com/watch?v=odguY-kCJ8c (42:55), момент искать вручную."
+      "tags": [
+        "parivision",
+        "team liquid",
+        "noone",
+        "magnus"
+      ],
+      "note": "⚠️ ЗАГЛУШКА: start=00:08:00 — найди реальный момент в видео https://www.youtube.com/watch?v=odguY-kCJ8c (правый клик по таймлайну → «Копировать URL с указанием времени»), впиши время и удали пометку. Все три клипа 01/03/06 используют один ролик, поэтому старты обязаны различаться."
     },
     {
       "name": "04_ws_solo_aurora",
@@ -51,7 +73,12 @@
       "hook": "Ws против всех",
       "match": "Aurora vs PARIVISION, 1win Essence III",
       "description": "Ws на Dragon Knight вытаскивает драку в одиночку.",
-      "tags": ["aurora", "parivision", "ws", "dragon knight"],
+      "tags": [
+        "aurora",
+        "parivision",
+        "ws",
+        "dragon knight"
+      ],
       "note": "Полный матч 36:16. ВНИМАНИЕ: start=05:00 — ЗАГЛУШКА. Открой видео, найди момент (в транскрипте: «WS is on a monster kill, 11,000 net worth and he just can't die») и впиши точный start в формате HH:MM:SS."
     },
     {
@@ -63,20 +90,29 @@
       "hook": "Проигравший вылетает",
       "match": "Team Liquid vs DO KONCA, Blast Slam IX",
       "description": "Официальный хайлайт матча на вылет: Team Liquid против DO KONCA.",
-      "tags": ["team liquid", "do konca", "blast slam", "dota2 highlights"],
+      "tags": [
+        "team liquid",
+        "do konca",
+        "blast slam",
+        "dota2 highlights"
+      ],
       "note": "Хайлайт 47:56. ВНИМАНИЕ: start=05:00 — ЗАГЛУШКА. Выбери яркий момент (фёрст блад Teekis, файт на миду с Sunstrike, миссклик по миникарте) и впиши точный start. Можно сделать несколько шортсов через \"segments\", продублировав запись с разными start."
     },
     {
       "name": "06_parivision_wipe",
       "title": "Тимвайп для PARIVISION! PARIVISION vs Liquid #shorts",
-      "url": "https://dltv.org/videos/4725-parivision-vs-team-liquid-highlight-map-1-team-wipe-for-parivision",
-      "start": "00:00:00",
+      "url": "https://www.youtube.com/watch?v=odguY-kCJ8c",
+      "start": "00:16:00",
       "duration": 20,
       "hook": "Полный тимвайп",
       "match": "PARIVISION vs Team Liquid, Blast Slam 9, карта 1",
       "description": "PARIVISION стирает Team Liquid с карты — командный вайп.",
-      "tags": ["parivision", "team liquid", "blast slam"],
-      "note": "DLTV-клип уже короткий — режем первые 20 сек."
+      "tags": [
+        "parivision",
+        "team liquid",
+        "blast slam"
+      ],
+      "note": "⚠️ ЗАГЛУШКА: start=00:16:00 — найди реальный момент в видео https://www.youtube.com/watch?v=odguY-kCJ8c (правый клик по таймлайну → «Копировать URL с указанием времени»), впиши время и удали пометку. Все три клипа 01/03/06 используют один ролик, поэтому старты обязаны различаться."
     }
   ]
 }
