@@ -101,7 +101,7 @@ jobs:
           retention-days: 7
 
       - name: Загрузить в релиз shorts-latest
-        if: success()
+        if: always()   # даже если часть клипов упала — выложим то, что получилось
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
