@@ -290,7 +290,8 @@ def download_direct(page_url, dst):
 
 
 BOT_CHECK_MARKERS = ("confirm you’re not a bot", "confirm you're not a bot",
-                     "Sign in to confirm")
+                     "Sign in to confirm", "Failed to extract any player response",
+                     "HTTP Error 429", "Too Many Requests")
 
 
 def _is_bot_check(exc):
