@@ -210,11 +210,18 @@ def cookies_file():
 
 
 def cookies_from_browser():
-    """Браузер для автоматического экспорта cookies при локальном запуске.
+    """Браузер для экспорта cookies — ТОЛЬКО по явному запросу пользователя.
 
-    Пример: SHORTS_COOKIES_FROM_BROWSER=chrome  (или firefox, edge, brave, chromium…)
+    Пример: SHORTS_COOKIES_FROM_BROWSER=chrome  (chrome/firefox/edge/brave/…)
+    Автоматически браузерные cookies не подставляем: современные Chrome/Edge
+    шифруют их через DPAPI, и чтение падает с "Failed to decrypt with DPAPI".
+
+    Значение "none"/"0" отключает cookies даже если что-то было задано в системе.
     """
-    return os.environ.get("SHORTS_COOKIES_FROM_BROWSER", "").strip()
+    value = os.environ.get("SHORTS_COOKIES_FROM_BROWSER", "").strip()
+    if value.lower() in ("none", "0", "off", "no"):
+        return ""
+    return value
 
 
 # Клиенты YouTube: часть из них не требует логина с «серых» IP дата-центров,
@@ -222,16 +229,19 @@ def cookies_from_browser():
 YT_PLAYER_CLIENTS = ["default", "tv", "ios", "mweb", "web_safari"]
 
 
-def _yt_extra_args(url):
-    """Браузерные cookies и/или перебор player-клиентов для YouTube."""
+def _yt_extra_args(url, use_browser_cookies=False):
+    """Аргументы yt-dlp: cookies.txt из файла и/или браузерные cookies.
+
+    Браузерные cookies добавляются только когда use_browser_cookies=True:
+    это запасной путь, который запускается лишь после bot-check.
+    """
     extra = yt_dlp_args()
-    browser = cookies_from_browser()
-    if browser:
-        extra = extra + ["--cookies-from-browser", browser]
+    if use_browser_cookies:
+        browser = cookies_from_browser()
+        if browser:
+            extra = extra + ["--cookies-from-browser", browser]
     if not re.search(r"(?:youtube\.com|youtu\.be)/", url):
         return extra
-    if cookies_file() or browser:
-        return extra  # с cookies достаточно обычного клиента
     forced = os.environ.get("YTDLP_PLAYER_CLIENTS", "").strip()
     clients = forced.split(",") if forced else YT_PLAYER_CLIENTS[:1]
     if clients and clients[0]:
@@ -239,7 +249,7 @@ def _yt_extra_args(url):
     return extra
 
 
-def download_section(url, out_template, start=None, end=None):
+def download_section(url, out_template, start=None, end=None, use_browser_cookies=False):
     """Скачать клип (или только нужный отрезок) через yt-dlp, через python -m yt_dlp."""
     cmd = [PYTHON, "-m", "yt_dlp",
            "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
@@ -257,7 +267,7 @@ def download_section(url, out_template, start=None, end=None):
     cookie = cookies_file()
     if cookie:
         cmd += ["--cookies", cookie]
-    cmd += _yt_extra_args(url)
+    cmd += _yt_extra_args(url, use_browser_cookies)
     cmd.append(url)
     run(cmd)
 
@@ -301,51 +311,104 @@ BOT_CHECK_MARKERS = ("confirm you’re not a bot", "confirm you're not a bot",
                      "Sign in to confirm", "Failed to extract any player response",
                      "HTTP Error 429", "Too Many Requests")
 
+COOKIE_ERROR_MARKERS = ("Failed to decrypt with DPAPI", "could not decrypt",
+                        "Failed to decrypt", "unable to decrypt",
+                        "failed to load cookies", "cookie database")
+
 
 def _is_bot_check(exc):
     return any(marker in str(exc) for marker in BOT_CHECK_MARKERS)
 
 
+def _is_cookie_error(exc):
+    """Ошибка чтения cookies из браузера (в т.ч. DPAPI на Windows)."""
+    return any(marker.lower() in str(exc).lower() for marker in COOKIE_ERROR_MARKERS)
+
+
+def _last_line(exc, limit=300):
+    lines = [ln for ln in str(exc).strip().splitlines() if ln.strip()]
+    return (lines[-1] if lines else "неизвестная ошибка")[:limit]
+
+
+def _retry_player_clients(url, template, start, end):
+    """Перебрать player-клиенты YouTube: помогает при антиботе с части IP."""
+    saved = os.environ.get("YTDLP_PLAYER_CLIENTS")
+    last_exc = None
+    try:
+        for client in YT_PLAYER_CLIENTS[1:]:
+            print(f"    пробую клиент YouTube '{client}'…")
+            os.environ["YTDLP_PLAYER_CLIENTS"] = client
+            try:
+                download_section(url, template, start, end)
+                return True
+            except Exception as retry_exc:  # noqa: BLE001
+                last_exc = retry_exc
+    finally:
+        if saved is None:
+            os.environ.pop("YTDLP_PLAYER_CLIENTS", None)
+        else:
+            os.environ["YTDLP_PLAYER_CLIENTS"] = saved
+    if last_exc:
+        raise last_exc
+    return False
+
+
 def download(job, dst, section=None):
     """Скачать исходник. Возвращает True, если файл начинается с начала отрезка.
 
-    Сначала yt-dlp, при неудаче — прямой разбор страницы (тогда файл целиком).
+    Порядок попыток (важно для домашнего интернета, где всё обычно работает
+    без cookies):
+      1. yt-dlp как есть — без cookies и лишних костылей;
+      2. если YouTube просит логин — перебор player-клиентов;
+      3. если всё ещё просит — cookies из браузера (может не сработать на Windows
+         из-за DPAPI — тогда объясняем, что делать);
+      4. в крайнем случае — прямая ссылка со страницы.
     """
     url = job["url"]
-    base, ext = os.path.splitext(dst)
+    base, _ext = os.path.splitext(dst)
     template = base + ".%(ext)s"
     start, end = section if section else (None, None)
     is_youtube = bool(re.search(r"(?:youtube\.com|youtu\.be)/", url))
     trimmed = bool(section) and is_youtube
-    try:
-        download_section(url, template, start, end)
-    except Exception as exc:  # noqa: BLE001 — пробуем запасной путь
-        if _is_bot_check(exc) and is_youtube and not (
-                cookies_file() or cookies_from_browser()):
-            # антибот YouTube: перебираем player-клиенты, которые обходят проверку
-            saved = os.environ.get("YTDLP_PLAYER_CLIENTS")
-            try:
-                for client in YT_PLAYER_CLIENTS[1:]:
-                    print(f"    YouTube просит логин — пробую клиент '{client}'…")
-                    os.environ["YTDLP_PLAYER_CLIENTS"] = client
-                    try:
-                        download_section(url, template, start, end)
+    browser_cookies_done = False
+
+    while True:
+        try:
+            download_section(url, template, start, end, browser_cookies_done)
+            break
+        except Exception as exc:  # noqa: BLE001 — разбираем причину и пробуем дальше
+            reason = _last_line(exc)
+
+            # cookies из браузера не прочитались (DPAPI и т.п.)
+            if _is_cookie_error(exc):
+                print("WARN: не удалось прочитать cookies из браузера "
+                      "(так бывает в Chrome/Edge на Windows).")
+                print("      Качаю дальше БЕЗ cookies.")
+                os.environ["SHORTS_COOKIES_FROM_BROWSER"] = "none"
+                browser_cookies_done = True
+                continue
+
+            if _is_bot_check(exc) and is_youtube:
+                if not browser_cookies_done and not cookies_file() and cookies_from_browser():
+                    print(f"WARN: YouTube просит вход ({reason[:120]})")
+                    print("      пробую cookies из браузера…")
+                    browser_cookies_done = True
+                    continue
+                if not browser_cookies_done and not cookies_file() and not cookies_from_browser():
+                    print(f"WARN: YouTube просит вход ({reason[:120]})")
+                    print("      пробую другие клиенты YouTube…")
+                    if _retry_player_clients(url, template, start, end):
                         break
-                    except JobError as retry_exc:
-                        exc = retry_exc
-                else:
-                    raise exc
-            finally:
-                if saved is None:
-                    os.environ.pop("YTDLP_PLAYER_CLIENTS", None)
-                else:
-                    os.environ["YTDLP_PLAYER_CLIENTS"] = saved
-        else:
-            reason = str(exc).strip().splitlines()
-            reason = reason[-1] if reason else "неизвестная ошибка"
-            print(f"WARN: yt-dlp не справился: {reason[:300]}")
+                    browser_cookies_done = True
+                    continue
+                raise exc
+
+            # любая другая ошибка: пробуем прямую ссылку со страницы
+            print(f"WARN: yt-dlp не справился: {reason}")
             print("      пробую прямую ссылку со страницы…")
             download_direct(url, dst)
+            break
+
     if not os.path.exists(dst):
         # yt-dlp мог сохранить в другой контейнер
         for candidate in os.listdir(os.path.dirname(dst) or "."):
@@ -677,11 +740,19 @@ def main():
         print("\nНе получилось: " + ", ".join(failed), file=sys.stderr)
         joined = " ".join(reasons.values()).lower()
         if "not a bot" in joined or "sign in to confirm" in joined:
-            print("\nПодсказка: YouTube требует вход в аккаунт. Сделайте ОДНО из двух:\n"
-                  "  1) установите расширение \"Get cookies.txt LOCALLY\", залогиньтесь в YouTube,\n"
-                  "     экспортируйте youtube.com и положите файл cookies.txt рядом с make_shorts.py;\n"
-                  "  2) или запустите с браузером: SHORTS_COOKIES_FROM_BROWSER=chrome\n"
-                  "     (Windows: set SHORTS_COOKIES_FROM_BROWSER=chrome)", file=sys.stderr)
+            print("\nПодсказка: YouTube требует вход в аккаунт.\n"
+                  "  Лучший способ — файл cookies.txt (он работает на всех системах):\n"
+                  "   1. В Chrome/Firefox установите расширение \"Get cookies.txt LOCALLY\".\n"
+                  "   2. Откройте youtube.com, войдите в аккаунт, нажмите расширение → Export.\n"
+                  "   3. Положите полученный cookies.txt рядом с make_shorts.py и запустите снова.\n"
+                  "  Внимание: встроенное чтение cookies из Chrome/Edge на Windows часто\n"
+                  "  падает с \"Failed to decrypt with DPAPI\" — это не ваша вина, используйте файл.",
+                  file=sys.stderr)
+        if "dpapi" in joined or "decrypt" in joined:
+            print("\nПодсказка: Windows не даёт прочитать cookies из браузера напрямую\n"
+                  "  (Chrome/Edge шифруют их через DPAPI). Используйте файл cookies.txt:\n"
+                  "  расширение \"Get cookies.txt LOCALLY\" → Export → положите cookies.txt\n"
+                  "  рядом с make_shorts.py.", file=sys.stderr)
         if "503" in joined or "403" in joined or "dltv" in joined:
             print("\nПодсказка: DLTV не отдаёт видео вашему провайдеру/сети. Берите\n"
                   "  YouTube-вариант клипа (ссылки BLAST уже стоят в clips.json).", file=sys.stderr)

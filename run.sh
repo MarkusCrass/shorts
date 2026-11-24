@@ -8,15 +8,9 @@ cd "$(dirname "$0")"
 
 python3 -m pip install --upgrade -q -r requirements.txt 2>/dev/null || true
 
-if [ -z "${SHORTS_COOKIES_FROM_BROWSER:-}" ] && [ ! -f cookies.txt ]; then
-  for b in chrome chromium firefox edge brave; do
-    if command -v "$b" >/dev/null 2>&1 || [ -d "/opt/google/chrome" ] || [ -d "$HOME/.mozilla/firefox" ]; then
-      export SHORTS_COOKIES_FROM_BROWSER="$b"
-      echo "Cookies беру из браузера: $b"
-      break
-    fi
-  done
-fi
+# cookies из браузера НЕ подставляем автоматически: на Windows они часто
+# не читаются (DPAPI), а на домашнем интернете YouTube обычно пускает и так.
+# Если понадобятся — скрипт сам сообщит и попробует.
 
 python3 make_shorts.py "$@"
 STATUS=$?
